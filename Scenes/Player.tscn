@@ -457,3 +457,7 @@ parameters/Walk/blend_position = Vector2( 0, 0 )
 
 [node name="Camera2D" type="Camera2D" parent="."]
 current = true
+
+[node name="RayCast2D" type="RayCast2D" parent="."]
+position = Vector2( 8, 8 )
+cast_to = Vector2( 0, 8 )
