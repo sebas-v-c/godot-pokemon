@@ -5,6 +5,9 @@ signal player_moving_signal
 signal player_stopped_signal
 #signal player_jumping_signal
 
+signal player_entering_door_signal
+signal player_entered_door_signal
+
 export var walk_speed = 4.0
 export var jump_speed = 4.0
 
@@ -17,6 +20,7 @@ onready var ray = $BlockingRayCast2D
 onready var ledge_ray = $LedgeRayCast2D2
 onready var player_collision = $CollisionShape2D
 onready var shadow = $Shadow
+onready var door_ray = $DoorRayCast2D
 
 var jumping_over_ledge: bool = false
 
@@ -27,8 +31,9 @@ var player_state = PlayerState.IDLE
 var facing_direction = FacingDirection.DOWN
 
 var initial_position = Vector2(0, 0)
-var input_direction = Vector2(0, 0)
+var input_direction = Vector2(0, 1)
 var is_moving = false
+var stop_input: bool = false
 # This variable is more like a product between two numbers that results in less
 # tan one. So it is used to multiply by the tile size and produce movement.
 var percent_moved_to_next_tile = 0.0
@@ -39,10 +44,21 @@ func _ready() -> void:
 	anim_tree.active = true
 	initial_position = position
 	shadow.visible = false
+	$Sprite.visible = true
+	anim_tree.set("parameters/Idle/blend_position", input_direction)
+	anim_tree.set("parameters/Walk/blend_position", input_direction)
+	anim_tree.set("parameters/Turn/blend_position", input_direction)
+
+
+func set_spawn(location: Vector2, direction: Vector2):
+	anim_tree.set("parameters/Idle/blend_position", direction)
+	anim_tree.set("parameters/Walk/blend_position", direction)
+	anim_tree.set("parameters/Turn/blend_position", direction)
+	position = location
 
 
 func _physics_process(delta) -> void:
-	if player_state == PlayerState.TURNING:
+	if player_state == PlayerState.TURNING or stop_input:
 		return
 	elif not is_moving:
 		process_player_input()
@@ -103,7 +119,28 @@ func move(delta) -> void:
 	ledge_ray.cast_to = desired_step
 	ledge_ray.force_raycast_update()
 
-	if (ledge_ray.is_colliding() and input_direction == Vector2(0, 1)) or jumping_over_ledge:
+	door_ray.cast_to = desired_step
+	door_ray.force_raycast_update()
+
+	if door_ray.is_colliding():
+		if percent_moved_to_next_tile == 0.0:
+			emit_signal("player_entering_door_signal")
+
+		percent_moved_to_next_tile += walk_speed * delta
+
+		if percent_moved_to_next_tile >= 1.0:
+			position = initial_position + (input_direction * TILE_SIZE)
+			percent_moved_to_next_tile = 0
+			is_moving = false
+			stop_input = true
+			# Player disapear
+			$AnimationPlayer.play("Disapear")
+			$Camera2D.clear_current()
+		else:
+			position = initial_position + (TILE_SIZE * input_direction * percent_moved_to_next_tile)
+
+
+	elif (ledge_ray.is_colliding() and input_direction == Vector2(0, 1)) or jumping_over_ledge:
 		percent_moved_to_next_tile += jump_speed * delta
 		emit_signal("player_moving_signal")
 		# Here we never multiply delta value more than one time.
@@ -150,3 +187,7 @@ func move(delta) -> void:
 
 func finished_turning() -> void:
 	player_state = PlayerState.IDLE
+
+
+func entered_door() -> void:
+	emit_signal("player_entered_door_signal")
